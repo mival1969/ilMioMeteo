@@ -1,0 +1,14 @@
+R_DEF: Internal format may change without notice
+local
+drawable bg_cloudy
+drawable bg_rainy
+drawable bg_sunny
+drawable ic_launcher_background
+drawable ic_launcher_foreground
+drawable weather_sprite
+mipmap ic_launcher
+mipmap ic_launcher_round
+string app_name
+style Theme.IlmioMeteo
+xml backup_rules
+xml data_extraction_rules

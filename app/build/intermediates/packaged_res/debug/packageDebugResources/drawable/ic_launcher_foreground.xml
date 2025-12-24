@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Simplified Sun/Cloud Icon suited for Adaptive Icon mask -->
+    
+    <!-- Sun (Yellow Circle) -->
+    <path
+        android:fillColor="#FFB300"
+        android:pathData="M78,38 m-12,0 a12,12 0 1,1 24,0 a12,12 0 1,1 -24,0" />
+
+    <!-- Cloud (White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,54 c0,-8.8 7.2,-16 16,-16 c7.2,0 13.3,4.8 15.3,11.4 c1.5,-0.9 3.3,-1.4 5.2,-1.4 c5.5,0 10,4.5 10,10 c0,5.5 -4.5,10 -10,10 H56 c-8.8,0 -16,-7.2 -16,-16 z" />
+</vector>
