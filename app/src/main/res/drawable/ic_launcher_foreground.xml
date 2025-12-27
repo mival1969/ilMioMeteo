@@ -10,7 +10,7 @@
         android:pivotY="54"
         android:scaleX="-0.85"
         android:scaleY="0.85"
-        android:translateX="-2"
+        android:translateX="4"
         android:translateY="6">
         
         <!-- Sun (Yellow Circle) -->
