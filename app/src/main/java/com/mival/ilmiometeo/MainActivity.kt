@@ -280,11 +280,11 @@ fun DetailScreen(
         Text(
             text = buildAnnotatedString {
                 append("Previsioni orarie per ")
-                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFFE0E0E0), fontSize = 20.sp)) {
+                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, fontSize = 20.sp)) {
                     append(dayItem.day)
                 }
                 append(" a ")
-                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFFE0E0E0), fontSize = 20.sp)) {
+                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, fontSize = 20.sp)) {
                     append(formattedCity)
                 }
             },
@@ -316,8 +316,8 @@ fun DetailScreen(
                          horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("Ora", color = Color.White, modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                        Text("Tempo", color = Color.White, modifier = Modifier.width(50.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold) 
-                         Text("°C", color = Color.White, modifier = Modifier.width(35.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Text("Tempo", color = Color.White, modifier = Modifier.width(45.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold) 
+                         Text("°C", color = Color.White, modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                         Text("Precip.", color = Color.White, modifier = Modifier.width(60.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                         Text("Vento", color = Color.White, modifier = Modifier.width(60.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                         Text(lastColLabel, color = Color.White, modifier = Modifier.width(30.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
@@ -346,14 +346,14 @@ fun HourlyCard(item: com.mival.ilmiometeo.model.HourlyItem) {
             // Ora (Match Header: 40.dp)
             Text(text = item.time, modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Color.Black)
             
-            // Icona Tempo (Match Header Tempo: 50.dp)
+            // Icona Tempo (Match Header Tempo: 45.dp)
             // Centered in column
-            Box(modifier = Modifier.width(50.dp), contentAlignment = Alignment.CenterStart) {
+            Box(modifier = Modifier.width(45.dp), contentAlignment = Alignment.CenterStart) {
                 SpriteIcon(code = item.weatherCode, modifier = Modifier.size(40.dp)) 
             }
 
-            // Temp (Match Header °C: 35.dp)
-            Text(text = "${item.temp}°", modifier = Modifier.width(35.dp), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Color.Black)
+            // Temp (Match Header °C: 40.dp)
+            Text(text = "${item.temp}°", modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Color.Black)
 
             // Pioggia (Match Header Prec: 60.dp)
             Row(modifier = Modifier.width(60.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -398,12 +398,12 @@ fun WeatherCard(item: WeatherItem, onClick: () -> Unit = {}) {
             // Icona
             // Use SpriteIcon if code is available, else fallback to URL logic
             if (item.weatherCode > 0) {
-                 SpriteIcon(code = item.weatherCode, modifier = Modifier.size(90.dp))
+                 SpriteIcon(code = item.weatherCode, modifier = Modifier.size(80.dp))
             } else {
                 Image(
                     painter = rememberAsyncImagePainter(item.iconUrl),
                     contentDescription = item.description,
-                    modifier = Modifier.size(90.dp)
+                    modifier = Modifier.size(80.dp)
                 )
             }
             

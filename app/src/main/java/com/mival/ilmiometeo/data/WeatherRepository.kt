@@ -25,9 +25,28 @@ class WeatherRepository {
             
             val hourlyItems = mutableListOf<HourlyItem>()
             
+            // Dynamic Column finding
+            val headerRow = doc.select("table.weather_table thead tr th")
+            var targetColIndex = -1
+            var targetColLabel = "UR%"
+
+            // Find index of "UR" or "perc"
+            for ((index, th) in headerRow.withIndex()) {
+                val text = th.text()
+                if (text.contains("UR", ignoreCase = true)) {
+                    targetColIndex = index
+                    targetColLabel = "UR%"
+                    break
+                } else if (text.contains("perc", ignoreCase = true) || text.contains("T.p.", ignoreCase = true)) {
+                    targetColIndex = index
+                    targetColLabel = "TP°"
+                    break
+                }
+            }
+
             // Selector: table.weather_table tbody tr (exclude ad_row, separator)
             val rows = doc.select("table.weather_table tbody tr:not(.ad_row):not(.separator)")
-            
+
             for (row in rows) {
                 // Ensure it's a data row (has time)
                 val time = row.select("td").firstOrNull()?.text() ?: ""
@@ -41,9 +60,8 @@ class WeatherRepository {
                     // 2: Temp
                     // 3: Rain (Precip)
                     // 5: Wind (Vento)
-                    // 9: Humidity (UR%)
                     
-                    if (tds.size >= 10) {
+                    if (tds.size >= 6) {
                         // Icon extraction
                         // Logic based on data-simbolo with fallback
                         var iconUrl = "https://www.ilmeteo.it/img/meteo/s/coperto.png"
@@ -88,68 +106,29 @@ class WeatherRepository {
 
                         val wind = tds[5].text()
                         
-                        // Dynamic column parsing based on table headers usually, but here we can try heuristics or fixed offsets if constant.
-                        // Standard: 6=Quota, 7=Aria, 8=Vis, 9=UR
-                        // Seaside: 5=Vento, 6=Onde, 7=Quota, 8=Tperc, 9=Vis?
-                        
-                        // Let's look for known markers in the row or just check size.
-                        // However, headers are safer. But inside loop we only have tds.
-                        // We can scan headers once per table? 
-                        // Simplified approach: Check if we have "T perc" in the 8th column (index 7) or 9th?
-                        // Actually, let's just grab "UR" if present, else "T perc".
-                        
+                        // Dynamic Target Column Extraction
                         var lastColValue = "--"
-                        var lastColLabel = "UR%"
                         
-                        // Layout Logic:
-                        // Standard (Torino):
-                        // 0: Ora, 1: Icon, 2: Temp, 3: Prec, 4: WindIcon, 5: WindParams, 
-                        // 6: Quota (has "m" or "neve"), 7: Aria, 8: Vis, 9: UR (value only)
-                        
-                        // Seaside (Palermo):
-                        // 0: Ora, ... 5: WindParams, 
-                        // 6: Onde (numeric), 7: Quota (has "m"), 8: Tperc, 9: Vis, ...
-                        
-                        val col6 = if (tds.size > 6) tds[6].text().trim() else ""
-                        val col7 = if (tds.size > 7) tds[7].text().trim() else ""
-                        
-                        // Determine layout
-                        val isSeaside = if (col6.all { it.isDigit() } && (col7.contains("m") || col7.contains("neve") || col7.contains("Quota"))) {
-                            true
+                        if (targetColIndex != -1 && tds.size > targetColIndex) {
+                            lastColValue = tds[targetColIndex].text()
+                            if (targetColLabel == "UR%" && !lastColValue.contains("%")) lastColValue += "%"
+                            if (targetColLabel == "TP°" && !lastColValue.contains("°")) lastColValue += "°"
                         } else {
-                            false
-                        }
-                        
-                        if (isSeaside) {
-                            // Seaside: Tperc is at index 8
-                             if (tds.size > 8) {
-                                 lastColValue = tds[8].text()
-                                 if (!lastColValue.contains("°")) lastColValue += "°"
-                                 lastColLabel = "TP°"
-                             }
-                        } else {
-                            // Standard: UR is at index 9
-                            // Note: previous inspection showed 14 cols, index 9 was "93"
+                            // Fallback if header parsing failed: keep looking at index 9 (standard) usually
                             if (tds.size > 9) {
-                                lastColValue = tds[9].text()
-                                if (!lastColValue.contains("%")) lastColValue += "%"
-                                lastColLabel = "UR%"
+                                lastColValue = tds[9].text() + "%" // Guessing UR
                             }
                         }
                         
-                        // Standard Columns mapping (best effort)
-                        // Snow/Quota is col 6 in Standard, col 7 in Seaside
-                        val snowLevel = if (isSeaside) col7 else col6
-                        
-                        // Visibility
-                        // Standard: col 8 (<10km)
-                        // Seaside: col 9 (>10km)
-                        val visibilityIndex = if (isSeaside) 9 else 8
-                        val visibility = if (tds.size > visibilityIndex) tds[visibilityIndex].text() else "--"
-                        
-                        val airQuality = if (!isSeaside && tds.size > 7) tds[7].text() else "--"
+                        // Quota/Snow & Visibility (Best effort / Optional)
+                        // This part is less critical causing the bug, so we can keep simple or skip if not displayed.
+                        // Currently the app only displays: Time, Icon, Temp, Rain, Wind, LastCol(UR/TP).
+                        // So we don't strictly need Quota/Visibility for the UI right now.
+                        val snowLevel = "--"
+                        val airQuality = "--"
+                        val visibility = "--"
 
-                        hourlyItems.add(HourlyItem(time, iconUrl, weatherCode, temp, rain, rainType, wind, snowLevel, airQuality, visibility, lastColValue, lastColLabel))
+                        hourlyItems.add(HourlyItem(time, iconUrl, weatherCode, temp, rain, rainType, wind, snowLevel, airQuality, visibility, lastColValue, targetColLabel))
                     }
                 }
             }
