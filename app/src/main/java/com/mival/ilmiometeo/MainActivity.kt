@@ -315,12 +315,12 @@ fun DetailScreen(
                          .padding(vertical = 8.dp, horizontal = 8.dp),
                          horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Ora", color = Color.White, modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                        Text("Tempo", color = Color.White, modifier = Modifier.width(45.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold) 
-                         Text("°C", color = Color.White, modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                        Text("Precip.", color = Color.White, modifier = Modifier.width(60.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                        Text("Vento", color = Color.White, modifier = Modifier.width(60.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                        Text(lastColLabel, color = Color.White, modifier = Modifier.width(30.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Text("Ora", color = Color.White, modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Text("Tempo", color = Color.White, modifier = Modifier.width(45.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 11.sp) 
+                         Text("°C", color = Color.White, modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Text("Precip.", color = Color.White, modifier = Modifier.width(60.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Text("Vento", color = Color.White, modifier = Modifier.width(60.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Text(lastColLabel, color = Color.White, modifier = Modifier.width(30.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                     }
                 }
 
