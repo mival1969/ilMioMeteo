@@ -44,15 +44,42 @@ class WeatherRepository {
                 }
             }
 
-            // Selector: table.weather_table tbody tr (exclude ad_row, separator)
-            val rows = doc.select("table.weather_table tbody tr:not(.ad_row):not(.separator)")
+            // Selector: Parse ALL rows in the document finding those that look like weather rows.
+            // This is the most robust way to find "overnight" rows that might be in different tables or outside the main table.
+            // We rely on strict filters (hidden check, column count, time format) to ignore garbage.
+            val rows = doc.select("tr")
 
             for (row in rows) {
-                // Ensure it's a data row (has time)
-                val time = row.select("td").firstOrNull()?.text() ?: ""
+                // EXCLUDE Hidden Rows
+                if (row.attr("style").contains("display: none") || row.hasClass("hidden") || row.hasClass("ad_row") || row.hasClass("separator")) {
+                    continue
+                }
+
+                val tds = row.select("td")
                 
-                // Heuristic: valid time rows usually start with digits (e.g. 01:00 or 1)
-                if (time.isNotEmpty() && (time[0].isDigit())) {
+                // DATA INTEGRITY CHECK:
+                if (tds.size < 6) continue
+
+                // Ensure it's a data row (has time)
+                val rawTime = tds.firstOrNull()?.text()?.trim() ?: ""
+                
+                // HYBRID Parsing Strategy:
+                var validTime: String? = null
+                
+                // Case 1: HH:mm
+                val colonMatch = Regex("""(\d{1,2}:\d{2})""").find(rawTime)
+                if (colonMatch != null) {
+                    validTime = colonMatch.value
+                } else {
+                    // Case 2: Just digits (1 or 2 digits), NO letters.
+                    // Keep RAW format as requested (e.g. "1" remains "1", not "1:00")
+                    if (rawTime.isNotEmpty() && rawTime.length <= 2 && rawTime.all { it.isDigit() }) {
+                        validTime = rawTime
+                    }
+                }
+
+                if (validTime != null) {
+                    val time = validTime
                     val tds = row.select("td")
                     // Mapping based on inspection:
                     // 0: Time
@@ -121,9 +148,6 @@ class WeatherRepository {
                         }
                         
                         // Quota/Snow & Visibility (Best effort / Optional)
-                        // This part is less critical causing the bug, so we can keep simple or skip if not displayed.
-                        // Currently the app only displays: Time, Icon, Temp, Rain, Wind, LastCol(UR/TP).
-                        // So we don't strictly need Quota/Visibility for the UI right now.
                         val snowLevel = "--"
                         val airQuality = "--"
                         val visibility = "--"

@@ -119,17 +119,9 @@ fun WeatherScreen() {
 
     Box(
         modifier = Modifier.fillMaxSize()
-            .then(if (!showImage) Modifier.background(activeGradient) else Modifier)
+            .background(activeGradient)
     ) {
-        // Background Image only if list is empty
-        if (showImage) {
-            Image(
-                painter = androidx.compose.ui.res.painterResource(id = R.drawable.bg_sunny),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-            )
-        }
+
 
         // Content
         if (selectedDay != null) {
@@ -324,7 +316,7 @@ fun DetailScreen(
                     }
                 }
 
-                items(hourlyItems.take(9)) { item ->
+                items(hourlyItems) { item ->
                     HourlyCard(item)
                 }
             }
