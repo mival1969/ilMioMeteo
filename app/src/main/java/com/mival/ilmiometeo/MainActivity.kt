@@ -36,10 +36,11 @@ import coil.compose.rememberAsyncImagePainter
 import com.mival.ilmiometeo.data.WeatherRepository
 import com.mival.ilmiometeo.model.WeatherItem
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.Image
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
@@ -60,6 +61,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeatherScreen() {
     var city by remember { mutableStateOf("") }
@@ -99,6 +101,24 @@ fun WeatherScreen() {
         }
     }
 
+    // Refresh Logic
+    val pullRefreshState = rememberPullToRefreshState()
+    if (pullRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            val targetCity = city.ifBlank { prefs.getString("last_city", "") ?: "" }
+             if (targetCity.isNotBlank()) {
+                try {
+                    val result = repository.getForecast(targetCity)
+                    if (result.isNotEmpty()) weatherList = result
+                    else errorMessage = "Previsioni non disponibili."
+                } catch (e: Exception) {
+                     errorMessage = e.message
+                }
+            }
+            pullRefreshState.endRefresh()
+        }
+    }
+
     // Background Logic
     // Initial screen (empty list) -> Sunny Image
     // Data loaded -> Gradient
@@ -131,7 +151,14 @@ fun WeatherScreen() {
                 hourlyItems = hourlyList,
                 isLoading = isDetailLoading,
                 isNight = isNight,
-                onClose = { selectedDay = null; hourlyList = emptyList() }
+                onClose = { selectedDay = null; hourlyList = emptyList() },
+                onRefresh = {
+                    scope.launch {
+                        if (selectedDay != null) {
+                            hourlyList = repository.getHourlyForecast(city, selectedDay!!.link)
+                        }
+                    }
+                }
             )
         } else {
             Column(
@@ -226,22 +253,32 @@ fun WeatherScreen() {
                             .padding(8.dp)
                     )
                 } else {
-                    LazyColumn(
-                        contentPadding = PaddingValues(bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(weatherList) { item ->
-                            WeatherCard(item) {
-                                if (item.link.isNotEmpty()) {
-                                    selectedDay = item
-                                    isDetailLoading = true
-                                    scope.launch {
-                                        hourlyList = repository.getHourlyForecast(city, item.link)
-                                        isDetailLoading = false
+                    Box(modifier = Modifier.nestedScroll(pullRefreshState.nestedScrollConnection)) {
+                        LazyColumn(
+                            contentPadding = PaddingValues(bottom = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(weatherList) { item ->
+                                WeatherCard(item) {
+                                    if (item.link.isNotEmpty()) {
+                                        selectedDay = item
+                                        isDetailLoading = true
+                                        scope.launch {
+                                            hourlyList = repository.getHourlyForecast(city, item.link)
+                                            isDetailLoading = false
+                                        }
                                     }
                                 }
                             }
                         }
+                        
+                        PullToRefreshContainer(
+                            state = pullRefreshState,
+                            modifier = Modifier.align(Alignment.TopCenter),
+                            containerColor = Color.White,
+                            contentColor = Color.Black
+                        )
                     }
                 }
             }
@@ -249,6 +286,7 @@ fun WeatherScreen() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
     city: String,
@@ -256,9 +294,18 @@ fun DetailScreen(
     hourlyItems: List<com.mival.ilmiometeo.model.HourlyItem>,
     isLoading: Boolean,
     onClose: () -> Unit,
-    isNight: Boolean
+    isNight: Boolean,
+    onRefresh: () -> Unit
 ) {
     val formattedCity = city.lowercase().replaceFirstChar { it.uppercase() }
+    val pullRefreshState = rememberPullToRefreshState()
+
+    if (pullRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            onRefresh()
+            pullRefreshState.endRefresh()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Button(
@@ -294,31 +341,42 @@ fun DetailScreen(
         } else {
             val lastColLabel = hourlyItems.firstOrNull()?.humidityLabel ?: "UR%"
             
-            LazyColumn(
-                contentPadding = PaddingValues(bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-             // Header Row
-                item {
-                    Row(
-                         modifier = Modifier
-                         .fillMaxWidth()
-                         .background(Color.Black.copy(alpha=0.6f))
-                         .padding(vertical = 8.dp, horizontal = 8.dp),
-                         horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Ora", color = Color.White, modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                        Text("Tempo", color = Color.White, modifier = Modifier.width(45.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 10.sp) 
-                         Text("°C", color = Color.White, modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                        Text("Precip.", color = Color.White, modifier = Modifier.width(60.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                        Text("Vento", color = Color.White, modifier = Modifier.width(60.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                        Text(lastColLabel, color = Color.White, modifier = Modifier.width(30.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+            
+            Box(modifier = Modifier.nestedScroll(pullRefreshState.nestedScrollConnection)) {
+                LazyColumn(
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                 // Header Row
+                    item {
+                        Row(
+                             modifier = Modifier
+                             .fillMaxWidth()
+                             .background(Color.Black.copy(alpha=0.6f))
+                             .padding(vertical = 8.dp, horizontal = 8.dp),
+                             horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Ora", color = Color.White, modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                            Text("Tempo", color = Color.White, modifier = Modifier.width(45.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 10.sp) 
+                             Text("°C", color = Color.White, modifier = Modifier.width(40.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                            Text("Precip.", color = Color.White, modifier = Modifier.width(60.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                            Text("Vento", color = Color.White, modifier = Modifier.width(60.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                            Text(lastColLabel, color = Color.White, modifier = Modifier.width(30.dp), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                        }
+                    }
+
+                    items(hourlyItems) { item ->
+                        HourlyCard(item)
                     }
                 }
-
-                items(hourlyItems) { item ->
-                    HourlyCard(item)
-                }
+                
+                PullToRefreshContainer(
+                    state = pullRefreshState,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    containerColor = Color.White,
+                    contentColor = Color.Black
+                )
             }
         }
     }

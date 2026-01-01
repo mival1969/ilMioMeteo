@@ -1,4 +1,4 @@
-#Sun Dec 28 11:35:12 CET 2025
+#Thu Jan 01 12:29:30 CET 2026
 base.0=/Users/mival/Sviluppi/ilMioMeteo/app/build/intermediates/dex/debug/mergeExtDexDebug/classes.dex
 base.1=/Users/mival/Sviluppi/ilMioMeteo/app/build/intermediates/dex/debug/mergeProjectDexDebug/0/classes.dex
 base.2=/Users/mival/Sviluppi/ilMioMeteo/app/build/intermediates/dex/debug/mergeProjectDexDebug/11/classes.dex

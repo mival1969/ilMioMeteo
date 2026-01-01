@@ -4,7 +4,7 @@
             "outputFile": "com.mival.ilmiometeo.app-mergeDebugResources-44:/values-v21/values-v21.xml",
             "map": [
                 {
-                    "source": "/Users/mival/.gradle/caches/9.0-milestone-1/transforms/ac6cbd3c45dd47a7855473ffb914ff88/transformed/core-1.12.0/res/values-v21/values-v21.xml",
+                    "source": "/Users/mival/.gradle/caches/8.9/transforms/9cede3128cda5573eca899b3ed55e0c5/transformed/core-1.12.0/res/values-v21/values-v21.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9,10,13",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4",
