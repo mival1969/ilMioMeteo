@@ -3,6 +3,7 @@ package com.mival.ilmiometeo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.border
@@ -73,16 +74,43 @@ fun WeatherScreen() {
     var selectedDay by remember { mutableStateOf<WeatherItem?>(null) }
     var hourlyList by remember { mutableStateOf<List<com.mival.ilmiometeo.model.HourlyItem>>(emptyList()) }
     var isDetailLoading by remember { mutableStateOf(false) }
+
+    // News State
+    var isNewsOpen by remember { mutableStateOf(false) }
+    var selectedNewsUrl by remember { mutableStateOf<String?>(null) }
+    var newsList by remember { mutableStateOf<List<com.mival.ilmiometeo.model.NewsItem>>(emptyList()) }
+    var isNewsLoading by remember { mutableStateOf(false) }
     
     val scope = rememberCoroutineScope()
     val repository = remember { WeatherRepository() }
     val keyboardController = LocalSoftwareKeyboardController.current
     
+    // Back Navigation Logic
+    BackHandler(enabled = selectedDay != null || weatherList.isNotEmpty() || isNewsOpen || selectedNewsUrl != null) {
+        if (selectedNewsUrl != null) {
+            // Case 0: Close News Detail -> News List
+            selectedNewsUrl = null
+        } else if (isNewsOpen) {
+            // Case 0.5: Close News List -> Home
+            isNewsOpen = false
+            newsList = emptyList() // Optional: clear list to save memory or keep it? Keeping it might be better for UX, but requirement says "Back to Home"
+        } else if (selectedDay != null) {
+            // Case 1: Close Detail, go back to 7-day list
+            selectedDay = null
+            hourlyList = emptyList()
+        } else if (weatherList.isNotEmpty()) {
+            // Case 2: Clear List, go back to Initial Search
+            weatherList = emptyList()
+            // city = "" // Keep city text
+            hourlyList = emptyList()
+        }
+    }
+
     // Persistence
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember { context.getSharedPreferences("weather_prefs", android.content.Context.MODE_PRIVATE) }
     
-    // Auto-load last city
+    // Auto-load last city (Only if not in News mode)
     LaunchedEffect(Unit) {
         val lastCity = prefs.getString("last_city", "")
         if (!lastCity.isNullOrBlank()) {
@@ -101,9 +129,9 @@ fun WeatherScreen() {
         }
     }
 
-    // Refresh Logic
+    // Refresh Logic (Weather)
     val pullRefreshState = rememberPullToRefreshState()
-    if (pullRefreshState.isRefreshing) {
+    if (pullRefreshState.isRefreshing && !isNewsOpen && weatherList.isNotEmpty()) {
         LaunchedEffect(true) {
             val targetCity = city.ifBlank { prefs.getString("last_city", "") ?: "" }
              if (targetCity.isNotBlank()) {
@@ -117,12 +145,13 @@ fun WeatherScreen() {
             }
             pullRefreshState.endRefresh()
         }
+    } else if (pullRefreshState.isRefreshing && weatherList.isEmpty()) {
+       LaunchedEffect(true) { pullRefreshState.endRefresh() }
     }
 
     // Background Logic
     // Initial screen (empty list) -> Sunny Image
     // Data loaded -> Gradient
-    val showImage = weatherList.isEmpty()
     
     val currentHour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
     val isNight = currentHour < 6 || currentHour >= 19
@@ -144,7 +173,29 @@ fun WeatherScreen() {
 
 
         // Content
-        if (selectedDay != null) {
+        if (selectedNewsUrl != null) {
+             NewsDetailScreen(
+                 url = selectedNewsUrl!!,
+                 repository = repository,
+                 onClose = { selectedNewsUrl = null },
+                 isNight = isNight
+             )
+        } else if (isNewsOpen) {
+            NewsListScreen(
+                newsList = newsList,
+                isLoading = isNewsLoading,
+                onRefresh = {
+                    scope.launch {
+                         isNewsLoading = true
+                         newsList = repository.getNewsList()
+                         isNewsLoading = false
+                    }
+                },
+                onItemClick = { url -> selectedNewsUrl = url },
+                onBack = { isNewsOpen = false },
+                isNight = isNight
+            )
+        } else if (selectedDay != null) {
             DetailScreen(
                 city = city,
                 dayItem = selectedDay!!,
@@ -233,6 +284,29 @@ fun WeatherScreen() {
                     })
                 )
                 
+                Spacer(modifier = Modifier.height(48.dp))
+                
+                // News Button (Only visible if not searching/no results yet, i.e. "First Screen")
+                if (weatherList.isEmpty() && !isLoading) {
+                    Button(
+                        onClick = { 
+                            isNewsOpen = true 
+                            isNewsLoading = true
+                            scope.launch {
+                                newsList = repository.getNewsList()
+                                isNewsLoading = false
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Black.copy(alpha = 0.6f),
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("News meteo (Italia) \u2192")
+                    }
+                }
+                
                 Spacer(modifier = Modifier.weight(1.5f)) // Balance bottom
 
 
@@ -253,34 +327,229 @@ fun WeatherScreen() {
                             .padding(8.dp)
                     )
                 } else {
-                    Box(modifier = Modifier.nestedScroll(pullRefreshState.nestedScrollConnection)) {
-                        LazyColumn(
-                            contentPadding = PaddingValues(bottom = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            items(weatherList) { item ->
-                                WeatherCard(item) {
-                                    if (item.link.isNotEmpty()) {
-                                        selectedDay = item
-                                        isDetailLoading = true
-                                        scope.launch {
-                                            hourlyList = repository.getHourlyForecast(city, item.link)
-                                            isDetailLoading = false
+                    if (weatherList.isNotEmpty()) {
+                        Box(modifier = Modifier.nestedScroll(pullRefreshState.nestedScrollConnection)) {
+                            LazyColumn(
+                                contentPadding = PaddingValues(bottom = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(weatherList) { item ->
+                                    WeatherCard(item) {
+                                        if (item.link.isNotEmpty()) {
+                                            selectedDay = item
+                                            isDetailLoading = true
+                                            scope.launch {
+                                                hourlyList = repository.getHourlyForecast(city, item.link)
+                                                isDetailLoading = false
+                                            }
                                         }
                                     }
                                 }
                             }
+                            
+                            PullToRefreshContainer(
+                                state = pullRefreshState,
+                                modifier = Modifier.align(Alignment.TopCenter),
+                                containerColor = Color.White,
+                                contentColor = Color.Black
+                            )
                         }
-                        
-                        PullToRefreshContainer(
-                            state = pullRefreshState,
-                            modifier = Modifier.align(Alignment.TopCenter),
-                            containerColor = Color.White,
-                            contentColor = Color.Black
-                        )
                     }
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NewsListScreen(
+    newsList: List<com.mival.ilmiometeo.model.NewsItem>,
+    isLoading: Boolean,
+    onRefresh: () -> Unit,
+    onItemClick: (String) -> Unit,
+    onBack: () -> Unit,
+    isNight: Boolean
+) {
+    val pullRefreshState = rememberPullToRefreshState()
+    val buttonColor = if (isNight) Color.White.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.6f)
+    val cardColor = if (isNight) Color.Black.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.9f)
+    val titleColor = if (isNight) Color.White else Color.Black
+    val dateColor = if (isNight) Color.LightGray else Color.DarkGray
+
+    if (pullRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            onRefresh()
+            pullRefreshState.endRefresh()
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        // App Bar / Header
+        Button(
+            onClick = onBack,
+            colors = ButtonDefaults.buttonColors(containerColor = buttonColor, contentColor = Color.White)
+        ) {
+            Text("← Home")
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = "Ultime Notizie Meteo",
+            style = MaterialTheme.typography.headlineSmall,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        if (isLoading) {
+             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color.White)
+            }
+        } else {
+            Box(modifier = Modifier.nestedScroll(pullRefreshState.nestedScrollConnection)) {
+                LazyColumn(
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    if (newsList.isEmpty()) {
+                        item {
+                            Text("Nessuna notizia trovata.", color = Color.White)
+                        }
+                    }
+                    items(newsList) { item ->
+                        Card(
+                            onClick = { onItemClick(item.link) },
+                            colors = CardDefaults.cardColors(containerColor = cardColor),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                if (!item.imageUrl.isNullOrEmpty()) {
+                                    Image(
+                                        painter = rememberAsyncImagePainter(item.imageUrl),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxWidth().height(150.dp).padding(bottom = 8.dp),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                                Text(
+                                    text = item.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = titleColor
+                                )
+                                if (item.date.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = item.date,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = dateColor
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                PullToRefreshContainer(
+                    state = pullRefreshState,
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 48.dp),
+                    containerColor = Color.White,
+                    contentColor = Color.Black
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun NewsDetailScreen(
+    url: String,
+    repository: WeatherRepository,
+    onClose: () -> Unit,
+    isNight: Boolean
+) {
+    var detail by remember { mutableStateOf<com.mival.ilmiometeo.model.NewsDetail?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    
+    LaunchedEffect(url) {
+        detail = repository.getNewsDetail(url)
+        isLoading = false
+    }
+
+    val buttonColor = if (isNight) Color.White.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.6f)
+    val cardColor = if (isNight) Color.Black.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.9f)
+    val textColor = if (isNight) Color.White else Color.Black
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) { 
+         Button(
+            onClick = onClose,
+            colors = ButtonDefaults.buttonColors(containerColor = buttonColor, contentColor = Color.White)
+        ) {
+            Text("← Lista Notizie")
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        if (isLoading) {
+             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color.White)
+            }
+        } else if (detail != null) {
+            Surface(
+                color = cardColor,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+                    item {
+                        Text(
+                            text = detail!!.title,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = textColor,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                    }
+                    
+                    items(detail!!.images) { imgUrl ->
+                        Image(
+                            painter = rememberAsyncImagePainter(imgUrl),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxWidth().wrapContentHeight().padding(bottom = 8.dp),
+                            contentScale = ContentScale.FillWidth
+                        )
+                    }
+                    
+                    // Improved HTML Rendering using AndroidView + TextView
+                    item {
+                         androidx.compose.ui.viewinterop.AndroidView(
+                            factory = { context ->
+                                android.widget.TextView(context).apply {
+                                    textSize = 16f
+                                    movementMethod = android.text.method.LinkMovementMethod.getInstance()
+                                }
+                            },
+                            update = { textView ->
+                                textView.setTextColor(if (isNight) android.graphics.Color.WHITE else android.graphics.Color.BLACK)
+                                val html = detail!!.htmlContent
+                                textView.text = androidx.core.text.HtmlCompat.fromHtml(html, androidx.core.text.HtmlCompat.FROM_HTML_MODE_COMPACT)
+                            }
+                        )
+                    }
+                    
+                    // Spacer at bottom
+                    item {
+                        Spacer(modifier = Modifier.height(32.dp))
+                    }
+                }
+            }
+        } else {
+             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Impossibile caricare la notizia.", color = Color.Gray)
             }
         }
     }

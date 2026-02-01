@@ -10,6 +10,150 @@ import java.io.IOException
 class WeatherRepository {
 
 
+    suspend fun getNewsList(): List<com.mival.ilmiometeo.model.NewsItem> = withContext(Dispatchers.IO) {
+        try {
+            val doc = Jsoup.connect("https://www.ilmeteo.it/notizie/cronaca-meteo-italia")
+                .userAgent("Mozilla/5.0")
+                .get()
+            
+            val items = mutableListOf<com.mival.ilmiometeo.model.NewsItem>()
+            
+            // The structure is list of .giornale-articolo elements.
+            // Inside each: 
+            // - Link/Title: .giornale-titolo a OR h2 a
+            // - Date: .giornale-data (Text: "Articolo del 31/01/2026 ore 18:50")
+            // - Image: .giornale-immagine img
+            
+            val articleElements = doc.select(".giornale-articolo")
+            
+            for (el in articleElements) {
+                // Find Title & Link
+                val linkTag = el.select("h2 a").first() 
+                    ?: el.select(".giornale-titolo a").first() 
+                    ?: el.select("a").firstOrNull { it.text().contains("Meteo", ignoreCase = true) }
+
+                val imgTag = el.select("img").first()
+                val dateTag = el.select(".giornale-data").first()
+                
+                if (linkTag != null) {
+                   val title = linkTag.text().trim()
+                   val link = linkTag.attr("abs:href")
+                   val imgUrl = imgTag?.attr("src")
+                   var dateText = dateTag?.text()?.trim() ?: ""
+                   
+                   // Clean up date text: "Articolo del 31/01/2026 ore 18:50" -> "31/01/2026 ore 18:50"
+                   dateText = dateText.replace("Articolo del ", "", ignoreCase = true).trim()
+
+                   // Filter: Must start with "Meteo" or "Allerta Meteo"
+                   if (title.startsWith("Meteo", ignoreCase = true) || title.startsWith("Allerta Meteo", ignoreCase = true)) {
+                       items.add(com.mival.ilmiometeo.model.NewsItem(title, link, imgUrl, dateText))
+                   }
+                }
+            }
+            
+            // Ensure descending order (newest first).
+            // Usually site is sorted, but to be sure we can try to parse date.
+            // However, the requested format is DD/MM/YYYY ore HH:mm.
+            // Let's implement a comparator.
+            val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy 'ore' HH:mm", java.util.Locale.ITALIAN)
+            
+            items.sortedByDescending { 
+                try {
+                    dateFormat.parse(it.date)?.time ?: 0L
+                } catch (e: Exception) {
+                    0L
+                }
+            }
+            
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    suspend fun getNewsDetail(url: String): com.mival.ilmiometeo.model.NewsDetail? = withContext(Dispatchers.IO) {
+        try {
+             val doc = Jsoup.connect(url)
+                .userAgent("Mozilla/5.0")
+                .get()
+            
+            // Title
+            val title = doc.selectFirst("h1")?.text() ?: ""
+            
+            // Content Container
+            val contentDiv = doc.selectFirst("div.news") ?: doc.selectFirst("article")
+            
+            val images = mutableListOf<String>()
+            val contentBuilder = StringBuilder()
+            
+            // Allowed tags whitelist for Reader Mode
+            val allowedTags = listOf("p", "br", "b", "strong", "i", "em", "h2", "h3")
+
+            if (contentDiv != null) {
+                // We want to preserve order of text and images.
+                // The structure can contain direct text nodes mixed with tags like <b>, <br>, etc.
+                // We must iterate over childNodes (including TextNodes), not just Element children.
+                
+                // Extract images separately for the image carousel
+                val imgs = contentDiv.select("img")
+                for (img in imgs) {
+                    val src = img.attr("src")
+                    if (src.isNotBlank()) images.add(src)
+                }
+                
+                // Extract Content
+                for (node in contentDiv.childNodes()) {
+                    if (node is org.jsoup.nodes.TextNode) {
+                        val text = node.text().trim()
+                        if (text.isNotEmpty()) {
+                            // If it's a loose text node, valid content.
+                            // We wrap it in span or just append it?
+                            // Since we are building HTML for TextView, raw text is fine, but formatting might need block structure.
+                            // Browsers render text nodes inline. 
+                            // If the previous element was a block (p, div), this starts a new line?
+                            // Let's just append the text.
+                            contentBuilder.append(text).append(" ")
+                        }
+                    } else if (node is org.jsoup.nodes.Element) {
+                        val tagName = node.tagName()
+                        
+                        if (tagName in allowedTags) {
+                             contentBuilder.append(node.outerHtml())
+                        } else if (tagName == "div" || tagName == "span") {
+                             // Recursive-like strategy is complex. 
+                             // Simplification: If it contains text, treat as p?
+                             // If it is strictly a container for more text...
+                             val hasBlock = node.selectFirst("p, h2, h3, br, div") != null
+                             if (node.hasText() || hasBlock) {
+                                  if (hasBlock) contentBuilder.append(node.html())
+                                  else contentBuilder.append("<p>${node.html()}</p>")
+                             }
+                        } else if (tagName == "br") {
+                            contentBuilder.append("<br>")
+                        }
+                        // Ignore scripts, iframes, ads
+                    }
+                }
+                
+                // Final safety check: if empty, try the old paragraph selection method
+                if (contentBuilder.isEmpty()) {
+                    val paragraphs = contentDiv.select("p")
+                    for (p in paragraphs) {
+                         contentBuilder.append(p.outerHtml())
+                    }
+                }
+            }
+            
+            // Clean up: Ensure no dangerous scripts or iframes, though Jsoup.connect doesn't execute JS.
+            // Just basic cleanup.
+            
+            com.mival.ilmiometeo.model.NewsDetail(title, contentBuilder.toString(), images)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
     suspend fun getHourlyForecast(city: String, dayLink: String): List<HourlyItem> = withContext(Dispatchers.IO) {
         val formattedCity = city.trim().replace(" ", "-")
         // Construct the detail URL. 
@@ -27,6 +171,7 @@ class WeatherRepository {
             
             // Dynamic Column finding
             val headerRow = doc.select("table.weather_table thead tr th")
+
             var targetColIndex = -1
             var targetColLabel = "UR%"
 
